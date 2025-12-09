@@ -7,18 +7,20 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-GROQ_API_KEY = GROQ_API_KEY = os.getenv("GROQ_API_KEY")
+GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 if not GROQ_API_KEY:
-    raise RuntimeError("GROQ_API_KEY is missing. Add it to your .env or deployment environment variables.")
+    raise RuntimeError("GROQ_API_KEY missing. Set it in Render (or local .env).")
+
 MODEL_ID = "meta-llama/llama-4-scout-17b-16e-instruct"
 API_URL = "https://api.groq.com/openai/v1/chat/completions"
 
 app = FastAPI()
 
-# Allow frontend access
+# --- CORS ---
+# For quick debugging you can use ["*"], but replace with your exact frontend origin in production.
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["https://startup-pitch-generator.vercel.app"],  # You can restrict this in production
+    allow_origins=["*"],  # <-- temporarily "*" for testing, change to ["https://your-frontend.com"] for prod
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -30,8 +32,22 @@ class PitchRequest(BaseModel):
     audience: str
     industry: str
 
+# Simple root so / doesn't 404
+@app.get("/")
+def root():
+    return {"status": "ok", "message": "Pitch API running. See /docs for API docs."}
+
+# Log incoming requests to help debug preflight/headers
 @app.post("/generate_pitch")
-def generate_pitch(data: PitchRequest):
+async def generate_pitch(request: Request, data: PitchRequest):
+    # Debug: print method & relevant headers for preflight debugging
+    print(">>> Request method:", request.method)
+    headers = dict(request.headers)
+    # Print only the most useful headers to avoid spam
+    print(">>> Origin:", headers.get("origin"))
+    print(">>> Access-Control-Request-Method:", headers.get("access-control-request-method"))
+    print(">>> Content-Type:", headers.get("content-type"))
+
     prompt = (
         f"Generate a detailed 200+ word startup pitch for the following:\n\n"
         f"Idea: {data.idea}\n"
@@ -41,7 +57,7 @@ def generate_pitch(data: PitchRequest):
         f"The pitch should clearly outline the problem, solution, product features, and potential impact."
     )
 
-    headers = {
+    headers_out = {
         "Authorization": f"Bearer {GROQ_API_KEY}",
         "Content-Type": "application/json",
     }
@@ -53,18 +69,19 @@ def generate_pitch(data: PitchRequest):
     }
 
     try:
-        response = requests.post(API_URL, headers=headers, json=payload)
-        res_data = response.json()
+        resp = requests.post(API_URL, headers=headers_out, json=payload)
+        print("Groq status:", resp.status_code)
+        if resp.status_code != 200:
+            print("Groq response text:", resp.text)
+            return {"error": "Groq returned non-200", "details": resp.text}
 
-        # Debug log if something goes wrong
-        if "choices" not in res_data:
-            print("Groq API Error:", res_data)
-            return {"error": "Failed to generate pitch", "details": res_data}
+        res_data = resp.json()
+        if "choices" not in res_data or not res_data["choices"]:
+            return {"error": "Unexpected response from Groq", "details": res_data}
 
         pitch_text = res_data["choices"][0]["message"]["content"]
         return {"pitch": pitch_text}
 
     except Exception as e:
-        print("Exception:", e)
-        return {"error": "An error occurred while generating pitch."}
-
+        print("Exception while calling Groq:", e)
+        return {"error": "Server error", "details": str(e)}
