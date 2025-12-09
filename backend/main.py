@@ -7,7 +7,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-GROQ_API_KEY = os.getenv("GROQ_API_KEY")
+GROQ_API_KEY = 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
 MODEL_ID = "meta-llama/llama-4-scout-17b-16e-instruct"
 API_URL = "https://api.groq.com/openai/v1/chat/completions"
 
