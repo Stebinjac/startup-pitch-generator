@@ -19,3 +19,4 @@ Thumbs.db
 # Ignore frontend build (if you have one)
 dist/
 node_modules/
+.env
