@@ -7,7 +7,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-GROQ_API_KEY = os.getenv("GROQ_API_KEY")
+GROQ_API_KEY = os.getenv("GROQ_API_KEYY")
 if not GROQ_API_KEY:
     raise RuntimeError("GROQ_API_KEY missing. Set it in Render (or local .env).")
 
